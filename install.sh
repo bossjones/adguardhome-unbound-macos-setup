@@ -340,6 +340,11 @@ server:
     interface: 127.0.0.1
     port: 5335
 
+    # ── Identity ─────────────────────────────────────────────────
+    # On macOS (Homebrew), there is no dedicated 'unbound' user.
+    # Run as the installing user; the service is localhost-only.
+    username: ""
+
     # ── Protocols ────────────────────────────────────────────────
     do-ip4: yes
     do-ip6: yes

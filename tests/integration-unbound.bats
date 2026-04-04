@@ -39,6 +39,7 @@ setup_file() {
 server:
     interface: 127.0.0.1
     port: 5335
+    username: ""
     root-hints: "${UNBOUND_CONF_DIR}/root.hints"
 
     do-ip4: yes
