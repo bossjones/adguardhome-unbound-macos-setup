@@ -46,6 +46,11 @@ EXPORTER_PORT=9618
 # Useful for CI testing and validation.
 DRY_RUN="${DRY_RUN:-0}"
 
+# --- Non-interactive mode ----------------------------------------------------
+# Set NONINTERACTIVE=1 to auto-accept all prompts and read credentials from
+# environment variables. Useful for CI integration tests and headless deployments.
+NONINTERACTIVE="${NONINTERACTIVE:-0}"
+
 if [[ "$DRY_RUN" == "1" ]]; then
     sudo()      { echo "[DRY-RUN] sudo $*"; cat > /dev/null 2>&1 || true; }
     brew()      {
@@ -88,8 +93,8 @@ step()    {
 
 confirm() {
     local prompt="${1:-Continue?}"
-    if [[ "$DRY_RUN" == "1" ]]; then
-        info "[DRY-RUN] Auto-confirming: ${prompt}"
+    if [[ "$DRY_RUN" == "1" || "$NONINTERACTIVE" == "1" ]]; then
+        info "[AUTO] Auto-confirming: ${prompt}"
         return 0
     fi
     read -rp "$(echo -e "${YELLOW}${prompt} [y/N]${NC} ")" answer
@@ -540,6 +545,11 @@ install_adguard_exporter() {
         agh_user="test-user"
         agh_pass="test-pass"
         info "[DRY-RUN] Using dummy credentials"
+    elif [[ "$NONINTERACTIVE" == "1" ]]; then
+        agh_url="${AGH_EXPORTER_URL:-http://127.0.0.1}"
+        agh_user="${AGH_EXPORTER_USER:-admin}"
+        agh_pass="${AGH_EXPORTER_PASS:-admin}"
+        info "Using credentials from environment variables"
     else
         echo -e "${YELLOW}The exporter needs your AdGuard Home web UI credentials.${NC}"
         echo -e "${YELLOW}(The ones you created during AdGuard Home setup wizard.)${NC}"

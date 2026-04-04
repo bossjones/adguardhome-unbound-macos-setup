@@ -75,9 +75,18 @@ setup() {
 
 @test "confirm auto-accepts in DRY_RUN mode" {
     export DRY_RUN=1
+    export NONINTERACTIVE=0
     run confirm "Test prompt"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"DRY-RUN"* ]]
+    [[ "$output" == *"AUTO"* ]]
+}
+
+@test "confirm auto-accepts in NONINTERACTIVE mode" {
+    export DRY_RUN=0
+    export NONINTERACTIVE=1
+    run confirm "Test prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"AUTO"* ]]
 }
 
 # --- wait_for_service tests --------------------------------------------------
@@ -146,6 +155,11 @@ setup() {
 
 @test "DRY_RUN variable is initialized" {
     run grep 'DRY_RUN=.*DRY_RUN:-' "$SCRIPT"
+    [ "$status" -eq 0 ]
+}
+
+@test "NONINTERACTIVE variable is initialized" {
+    run grep 'NONINTERACTIVE=.*NONINTERACTIVE:-' "$SCRIPT"
     [ "$status" -eq 0 ]
 }
 

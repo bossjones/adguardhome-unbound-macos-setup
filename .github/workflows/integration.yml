@@ -1,0 +1,66 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'        # Weekly Monday 6 AM UTC
+  pull_request:
+    branches: [main]
+    paths: ['install.sh']       # Only when the installer changes
+
+jobs:
+  tier1-enhanced-dryrun:
+    name: "Tier 1: Enhanced Dry-Run"
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: brew install bats-core
+
+      - name: Run enhanced dry-run tests
+        run: bats tests/integration-dryrun.bats
+
+  tier2-unbound:
+    name: "Tier 2: Unbound Integration"
+    runs-on: macos-latest
+    timeout-minutes: 10
+    needs: [tier1-enhanced-dryrun]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: brew install bats-core
+
+      - name: Run Unbound integration tests
+        run: bats tests/integration-unbound.bats
+
+  tier2-exporter:
+    name: "Tier 2: Exporter Binary"
+    runs-on: macos-latest
+    timeout-minutes: 10
+    needs: [tier1-enhanced-dryrun]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: brew install bats-core
+
+      - name: Run exporter integration tests
+        run: bats tests/integration-exporter.bats
+
+  tier3-lifecycle:
+    name: "Tier 3: Full Lifecycle"
+    runs-on: macos-latest
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: [tier2-unbound, tier2-exporter]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: brew install bats-core
+
+      - name: Run full lifecycle tests
+        run: bats tests/integration-lifecycle.bats
