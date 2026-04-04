@@ -1,0 +1,10 @@
+# Start strict, relax as needed
+severity=warning
+# Allow echo -e (bashism used throughout for colored output)
+disable=SC3037
+# Dry-run mode overrides sudo as a function, so "sudo brew/launchctl/lsof"
+# actually hits our sudo() function — SC2032/SC2033 are false positives
+disable=SC2032
+disable=SC2033
+# Intentional single quotes to write literal eval expression to .zprofile
+disable=SC2016

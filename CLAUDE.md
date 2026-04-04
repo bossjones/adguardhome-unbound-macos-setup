@@ -19,7 +19,10 @@ Network devices → AdGuard Home (0.0.0.0:53) → Unbound (127.0.0.1:5335) → r
 
 ## Repository Structure
 
-Single-file project: `install.sh` is the entire codebase — a Bash script (~830 lines) with functions for each component's install, status check, and uninstall.
+- `install.sh` — the main installer script (~920 lines of Bash) with functions for each component's install, status check, and uninstall
+- `tests/install.bats` — BATS unit tests for helper functions and regression guards
+- `.github/workflows/ci.yml` — GitHub Actions CI (shellcheck, syntax, BATS, dry-run smoke tests)
+- `.shellcheckrc` — ShellCheck configuration
 
 ## Running the Script
 
@@ -29,18 +32,27 @@ chmod +x install.sh
 ./install.sh --adguard-only  # Install only AdGuard Home
 ./install.sh --status        # Check service status and connectivity
 ./install.sh --uninstall     # Remove everything
+./install.sh --dry-run       # Simulate full install (no changes made)
 ./install.sh --help          # Show help with architecture diagram
 ```
 
 The script requires macOS, must NOT be run as root (uses `sudo` internally as needed), and is interactive (prompts for confirmation at each stage, asks for AdGuard Home credentials for the exporter).
 
+### Dry-Run Mode
+
+Set `DRY_RUN=1` or pass `--dry-run` to simulate installation without making any changes. External commands (`sudo`, `brew`, `curl`, `dig`, `launchctl`, `lsof`) are stubbed, prompts auto-accept, and file writes are skipped. Read-only brew queries (`--prefix`, `list`) pass through.
+
 ## Shell Script Conventions
 
 - Uses `set -euo pipefail` for strict error handling
 - Colored output helpers: `info()`, `success()`, `warn()`, `error()`, `step()` for consistent formatting
-- `confirm()` for interactive yes/no prompts
+- `confirm()` for interactive yes/no prompts (auto-accepts in dry-run mode)
+- `warn_if_unknown_ip()` guards against displaying `http://UNKNOWN:...` URLs
+- `wait_for_service()` retry loop replaces fixed `sleep` calls
+- ERR trap provides recovery guidance on failure
 - Configuration variables at top of file (install dirs, versions, ports)
 - Each component has its own install function that is independently callable
+- `BASH_SOURCE` guard at bottom allows sourcing without executing `main()`
 
 ## Key Paths and Ports
 
@@ -51,9 +63,16 @@ The script requires macOS, must NOT be run as root (uses `sudo` internally as ne
 | adguard-exporter | `/usr/local/bin/adguard-exporter` | 9618 | Metrics endpoint |
 | Exporter credentials | `/etc/adguard-exporter/adguard-exporter.env` | — | chmod 600 |
 
-## Testing Changes
+## Testing
 
-No automated test suite. To validate changes:
-1. Run `bash -n install.sh` to syntax-check
-2. Run `shellcheck install.sh` if shellcheck is available
-3. Test with `--status` flag on a macOS machine with the stack installed
+CI runs automatically on push/PR via GitHub Actions (`.github/workflows/ci.yml`).
+
+```bash
+bash -n install.sh                    # Syntax check
+shellcheck install.sh                 # Lint (uses .shellcheckrc)
+bats tests/                           # Unit tests (requires: brew install bats-core)
+DRY_RUN=1 bash install.sh --full      # Smoke test full flow
+DRY_RUN=1 bash install.sh --adguard-only  # Smoke test adguard-only flow
+```
+
+To run a single BATS test: `bats tests/install.bats --filter "test name pattern"`

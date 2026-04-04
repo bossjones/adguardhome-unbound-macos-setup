@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: brew install shellcheck
+
+      - name: Run shellcheck
+        run: shellcheck install.sh
+
+  syntax:
+    name: Bash Syntax Check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check with system Bash 3.2
+        run: /bin/bash -n install.sh
+
+      - name: Check with Homebrew Bash 5
+        run: |
+          brew install bash
+          BREW_BASH="$(brew --prefix)/bin/bash"
+          "$BREW_BASH" -n install.sh
+
+  unit-tests:
+    name: Unit Tests (BATS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: brew install bats-core
+
+      - name: Run tests
+        run: bats tests/
+
+  dry-run:
+    name: Dry-Run Smoke Tests
+    runs-on: macos-latest
+    needs: [shellcheck, syntax]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: --help exits 0
+        run: bash install.sh --help
+
+      - name: --dry-run --full
+        run: DRY_RUN=1 bash install.sh --full
+
+      - name: --dry-run --adguard-only
+        run: DRY_RUN=1 bash install.sh --adguard-only
+
+      - name: Verify Bash 3.2 compat (--help)
+        run: /bin/bash install.sh --help
+
+      - name: Verify Bash 3.2 compat (--dry-run --full)
+        run: DRY_RUN=1 /bin/bash install.sh --full

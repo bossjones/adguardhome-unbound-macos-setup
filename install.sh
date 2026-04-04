@@ -26,6 +26,7 @@
 #   --full           Install AdGuard Home + Unbound + adguard-exporter (default)
 #   --uninstall      Remove everything
 #   --status         Check service status
+#   --dry-run        Simulate installation (for CI/testing)
 #   --help           Show this help
 # =============================================================================
 
@@ -39,6 +40,30 @@ AGH_EXPORTER_INSTALL_DIR="/usr/local/bin"
 AGH_EXPORTER_ENV_DIR="/etc/adguard-exporter"
 UNBOUND_PORT=5335
 EXPORTER_PORT=9618
+
+# --- Dry-run mode ------------------------------------------------------------
+# Set DRY_RUN=1 to simulate installation without making changes.
+# Useful for CI testing and validation.
+DRY_RUN="${DRY_RUN:-0}"
+
+if [[ "$DRY_RUN" == "1" ]]; then
+    sudo()      { echo "[DRY-RUN] sudo $*"; }
+    brew()      {
+        # Allow read-only brew queries; stub mutating commands
+        case "$1" in
+            --prefix|--cellar|list|info)
+                command brew "$@"
+                ;;
+            *)
+                echo "[DRY-RUN] brew $*"
+                ;;
+        esac
+    }
+    launchctl() { echo "[DRY-RUN] launchctl $*"; }
+    curl()      { echo "[DRY-RUN] curl $*"; }
+    dig()       { echo "[DRY-RUN] dig $*"; }
+    lsof()      { echo "[DRY-RUN] lsof $*"; }
+fi
 
 # --- Colors & helpers --------------------------------------------------------
 RED='\033[0;31m'
@@ -63,9 +88,16 @@ step()    {
 
 confirm() {
     local prompt="${1:-Continue?}"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        info "[DRY-RUN] Auto-confirming: ${prompt}"
+        return 0
+    fi
     read -rp "$(echo -e "${YELLOW}${prompt} [y/N]${NC} ")" answer
-    [[ "${answer,,}" == "y" ]]
+    [[ "${answer}" =~ ^[Yy]$ ]]
 }
+
+# --- ERR trap for partial-failure guidance ------------------------------------
+trap 'error "Script failed at line ${LINENO}. Check state: $0 --status | Clean up: $0 --uninstall"' ERR
 
 # --- Pre-flight checks -------------------------------------------------------
 preflight() {
@@ -123,6 +155,29 @@ get_local_ip() {
     ipconfig getifaddr en0 2>/dev/null \
         || ipconfig getifaddr en1 2>/dev/null \
         || echo "UNKNOWN"
+}
+
+warn_if_unknown_ip() {
+    local ip="$1"
+    if [[ "$ip" == "UNKNOWN" ]]; then
+        warn "Could not detect local IP (neither en0 nor en1 has an IP)."
+        warn "URLs below will show 'UNKNOWN' — replace with your actual IP."
+    fi
+}
+
+# --- Service readiness helper ------------------------------------------------
+wait_for_service() {
+    local description="$1" check_cmd="$2" max_attempts="${3:-10}" delay="${4:-1}"
+    local attempt=1
+    info "Waiting for ${description}..."
+    while [[ $attempt -le $max_attempts ]]; do
+        if eval "$check_cmd" &>/dev/null; then
+            return 0
+        fi
+        sleep "$delay"
+        ((attempt++))
+    done
+    return 1
 }
 
 # --- Disable macOS mDNSResponder on port 53 if needed ------------------------
@@ -193,6 +248,7 @@ install_adguard_home() {
 
     local ip
     ip=$(get_local_ip)
+    warn_if_unknown_ip "$ip"
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
@@ -245,6 +301,12 @@ install_unbound() {
     local unbound_conf_dir="${brew_prefix}/etc/unbound"
 
     step "Configuring Unbound"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        info "[DRY-RUN] Would write unbound.conf to ${unbound_conf_dir}/unbound.conf"
+        info "[DRY-RUN] Would download root.hints to ${unbound_conf_dir}/root.hints"
+        info "[DRY-RUN] Would validate config with unbound-checkconf"
+    else
 
     mkdir -p "$unbound_conf_dir"
 
@@ -330,6 +392,12 @@ server:
     log-servfail: yes
 UNBOUND_CONF
 
+    # Add root-hints directive pointing to the downloaded file
+    if [[ -f "${unbound_conf_dir}/root.hints" ]]; then
+        sed -i '' "/^    port: 5335$/a\\
+\\    root-hints: \"${unbound_conf_dir}/root.hints\"" "${unbound_conf_dir}/unbound.conf"
+    fi
+
     success "Unbound config written to ${unbound_conf_dir}/unbound.conf"
 
     # Validate
@@ -341,16 +409,21 @@ UNBOUND_CONF
         exit 1
     fi
 
-    step "Starting Unbound"
-    sudo brew services start unbound
-    sleep 2
+    fi  # end DRY_RUN guard for config write/validate
 
-    # Test it
-    info "Testing: dig @127.0.0.1 -p ${UNBOUND_PORT} example.com"
-    if dig @127.0.0.1 -p "${UNBOUND_PORT}" example.com +short +timeout=5; then
+    step "Starting Unbound"
+    # NOTE: 'sudo brew services' runs Unbound as a system-level LaunchDaemon so it
+    # starts at boot without a logged-in user — important for a headless DNS server.
+    # Trade-off: this can set root ownership on Homebrew files. If 'brew upgrade'
+    # later fails with permission errors, fix with:
+    #   sudo chown -R "$(whoami)" "$(brew --prefix)"/*
+    sudo brew services start unbound
+
+    # Wait for Unbound to start responding, then test
+    if wait_for_service "Unbound" "dig @127.0.0.1 -p ${UNBOUND_PORT} example.com +short +timeout=2" 10 1; then
         success "Unbound is resolving queries on 127.0.0.1:${UNBOUND_PORT}"
     else
-        error "Unbound test query failed."
+        error "Unbound did not respond within 10 seconds."
         error "Check: sudo brew services list | grep unbound"
         error "Check: ${brew_prefix}/sbin/unbound-checkconf"
         exit 1
@@ -358,6 +431,7 @@ UNBOUND_CONF
 
     local ip
     ip=$(get_local_ip)
+    warn_if_unknown_ip "$ip"
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
@@ -398,6 +472,11 @@ install_adguard_exporter() {
     info "Attempting binary download for darwin/${go_arch}..."
     info "URL: ${download_url}"
 
+    if [[ "$DRY_RUN" == "1" ]]; then
+        info "[DRY-RUN] Would download/build adguard-exporter binary"
+        info "[DRY-RUN] Would install to ${AGH_EXPORTER_INSTALL_DIR}/adguard-exporter"
+    else
+
     local tmp_dir
     tmp_dir=$(mktemp -d)
     local downloaded=false
@@ -426,7 +505,7 @@ install_adguard_exporter() {
         fi
 
         info "Building adguard-exporter from source..."
-        GOBIN="${tmp_dir}" go install "github.com/henrywhitaker3/adguard-exporter@latest"
+        GOBIN="${tmp_dir}" go install "github.com/henrywhitaker3/adguard-exporter@${AGH_EXPORTER_VERSION}"
 
         if [[ -f "${tmp_dir}/adguard-exporter" ]]; then
             chmod +x "${tmp_dir}/adguard-exporter"
@@ -446,38 +525,48 @@ install_adguard_exporter() {
     rm -rf "${tmp_dir}"
     success "Binary installed to ${AGH_EXPORTER_INSTALL_DIR}/adguard-exporter"
 
+    fi  # end DRY_RUN guard for binary download/install
+
     step "Configuring adguard-exporter"
 
     local ip
     ip=$(get_local_ip)
+    warn_if_unknown_ip "$ip"
 
     # Prompt for AdGuard Home credentials
-    echo -e "${YELLOW}The exporter needs your AdGuard Home web UI credentials.${NC}"
-    echo -e "${YELLOW}(The ones you created during AdGuard Home setup wizard.)${NC}"
-    echo ""
-
     local agh_url agh_user agh_pass
-    read -rp "AdGuard Home URL [http://${ip}]: " agh_url
-    agh_url="${agh_url:-http://${ip}}"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        agh_url="http://127.0.0.1"
+        agh_user="test-user"
+        agh_pass="test-pass"
+        info "[DRY-RUN] Using dummy credentials"
+    else
+        echo -e "${YELLOW}The exporter needs your AdGuard Home web UI credentials.${NC}"
+        echo -e "${YELLOW}(The ones you created during AdGuard Home setup wizard.)${NC}"
+        echo ""
 
-    read -rp "AdGuard Home username: " agh_user
-    read -rsp "AdGuard Home password: " agh_pass
-    echo ""
+        read -rp "AdGuard Home URL [http://${ip}]: " agh_url
+        agh_url="${agh_url:-http://${ip}}"
 
-    if [[ -z "$agh_user" || -z "$agh_pass" ]]; then
-        warn "Username or password is empty. You can edit the env file later at:"
-        warn "${AGH_EXPORTER_ENV_DIR}/adguard-exporter.env"
+        read -rp "AdGuard Home username: " agh_user
+        read -rsp "AdGuard Home password: " agh_pass
+        echo ""
+
+        if [[ -z "$agh_user" || -z "$agh_pass" ]]; then
+            warn "Username or password is empty. You can edit the env file later at:"
+            warn "${AGH_EXPORTER_ENV_DIR}/adguard-exporter.env"
+        fi
     fi
 
     # Create env file (used by the LaunchDaemon)
     sudo mkdir -p "${AGH_EXPORTER_ENV_DIR}"
-    sudo tee "${AGH_EXPORTER_ENV_DIR}/adguard-exporter.env" > /dev/null <<EOF
-ADGUARD_SERVERS=${agh_url}
-ADGUARD_USERNAMES=${agh_user}
-ADGUARD_PASSWORDS=${agh_pass}
-INTERVAL=30s
-BIND_ADDR=:${EXPORTER_PORT}
-EOF
+    {
+        printf 'ADGUARD_SERVERS=%s\n' "${agh_url}"
+        printf 'ADGUARD_USERNAMES=%s\n' "${agh_user}"
+        printf 'ADGUARD_PASSWORDS=%s\n' "${agh_pass}"
+        printf 'INTERVAL=30s\n'
+        printf 'BIND_ADDR=:%s\n' "${EXPORTER_PORT}"
+    } | sudo tee "${AGH_EXPORTER_ENV_DIR}/adguard-exporter.env" > /dev/null
     # Restrict permissions — contains credentials
     sudo chmod 600 "${AGH_EXPORTER_ENV_DIR}/adguard-exporter.env"
     success "Env file written to ${AGH_EXPORTER_ENV_DIR}/adguard-exporter.env"
@@ -493,9 +582,9 @@ source /etc/adguard-exporter/adguard-exporter.env
 set +a
 exec /usr/local/bin/adguard-exporter
 WRAPPER
-    sudo chmod +x /usr/local/bin/adguard-exporter-wrapper.sh
+    sudo chmod 700 /usr/local/bin/adguard-exporter-wrapper.sh
 
-    sudo tee /Library/LaunchDaemons/com.henrywhitaker3.adguard-exporter.plist > /dev/null <<PLIST
+    sudo tee /Library/LaunchDaemons/com.henrywhitaker3.adguard-exporter.plist > /dev/null <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -527,7 +616,7 @@ PLIST
     sudo launchctl bootout system /Library/LaunchDaemons/com.henrywhitaker3.adguard-exporter.plist 2>/dev/null || true
     sudo launchctl bootstrap system /Library/LaunchDaemons/com.henrywhitaker3.adguard-exporter.plist
 
-    sleep 2
+    wait_for_service "adguard-exporter" "curl -sf http://127.0.0.1:${EXPORTER_PORT}/metrics" 10 1 || true
 
     # Verify it's running
     if curl -sf "http://127.0.0.1:${EXPORTER_PORT}/metrics" > /dev/null 2>&1; then
@@ -567,6 +656,7 @@ PLIST
 firewall_reminder() {
     local ip
     ip=$(get_local_ip)
+    warn_if_unknown_ip "$ip"
 
     step "macOS Firewall Check"
 
@@ -594,6 +684,7 @@ firewall_reminder() {
 router_reminder() {
     local ip
     ip=$(get_local_ip)
+    warn_if_unknown_ip "$ip"
 
     echo ""
     echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════════╗${NC}"
@@ -626,6 +717,7 @@ show_status() {
 
     local ip
     ip=$(get_local_ip)
+    warn_if_unknown_ip "$ip"
 
     echo -e "${BLUE}── AdGuard Home ──${NC}"
     if [[ -f "${AGH_INSTALL_DIR}/AdGuardHome" ]]; then
@@ -704,6 +796,12 @@ uninstall() {
     info "Removing Unbound..."
     sudo brew services stop unbound 2>/dev/null || true
     brew uninstall unbound 2>/dev/null || true
+    local brew_prefix
+    brew_prefix="$(brew --prefix 2>/dev/null || echo "/opt/homebrew")"
+    if [[ -d "${brew_prefix}/etc/unbound" ]]; then
+        warn "Unbound config remains at ${brew_prefix}/etc/unbound/"
+        warn "  Remove manually: rm -rf ${brew_prefix}/etc/unbound"
+    fi
     success "Unbound removed"
 
     # AdGuard Home
@@ -732,6 +830,7 @@ Options:
   --full           Install AdGuard Home + Unbound + exporter (default)
   --uninstall      Remove all services
   --status         Check service status and connectivity
+  --dry-run        Simulate installation without making changes (for CI/testing)
   --help           Show this help
 
 Architecture:
@@ -779,6 +878,28 @@ main() {
         --help|-h)
             show_help
             exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            # Re-apply command overrides since DRY_RUN was set after init
+            sudo()      { echo "[DRY-RUN] sudo $*"; }
+            brew()      {
+                case "$1" in
+                    --prefix|--cellar|list|info)
+                        command brew "$@"
+                        ;;
+                    *)
+                        echo "[DRY-RUN] brew $*"
+                        ;;
+                esac
+            }
+            launchctl() { echo "[DRY-RUN] launchctl $*"; }
+            curl()      { echo "[DRY-RUN] curl $*"; }
+            dig()       { echo "[DRY-RUN] dig $*"; }
+            lsof()      { echo "[DRY-RUN] lsof $*"; }
+            shift
+            main "${1:---full}"
+            return $?
             ;;
         --status)
             preflight
@@ -830,4 +951,6 @@ main() {
     success "All done! Run '$(basename "$0") --status' anytime to check health."
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
