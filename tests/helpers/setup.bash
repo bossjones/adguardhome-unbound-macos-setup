@@ -51,9 +51,13 @@ port_is_free() {
 # --- Cleanup functions -------------------------------------------------------
 
 cleanup_unbound() {
+    # Stop the service (started with sudo, so stop with sudo)
     sudo brew services stop unbound 2>/dev/null || true
-    # Give launchctl time to fully release the service before uninstalling
-    sleep 2
+    # Fully deregister from launchd — sudo creates a system-level plist
+    # that can block brew uninstall if not explicitly removed
+    sudo launchctl bootout system/homebrew.mxcl.unbound 2>/dev/null || true
+    sudo rm -f /Library/LaunchDaemons/homebrew.mxcl.unbound.plist 2>/dev/null || true
+    sleep 1
     brew uninstall --force unbound 2>/dev/null || true
     local conf_dir
     conf_dir="$(brew --prefix 2>/dev/null)/etc/unbound" 2>/dev/null || true
