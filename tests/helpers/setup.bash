@@ -52,7 +52,9 @@ port_is_free() {
 
 cleanup_unbound() {
     sudo brew services stop unbound 2>/dev/null || true
-    brew uninstall unbound --force 2>/dev/null || true
+    # Give launchctl time to fully release the service before uninstalling
+    sleep 2
+    brew uninstall --force unbound 2>/dev/null || true
     local conf_dir
     conf_dir="$(brew --prefix 2>/dev/null)/etc/unbound" 2>/dev/null || true
     if [[ -n "$conf_dir" && -d "$conf_dir" ]]; then

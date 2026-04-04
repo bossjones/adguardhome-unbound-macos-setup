@@ -152,9 +152,19 @@ setup() {
     if ! command -v dig &>/dev/null; then
         brew install bind 2>/dev/null || skip "dig not available"
     fi
-    run dig @127.0.0.1 -p 5335 example.com +short +timeout=10 +retry=2
+    # A fresh recursive resolver may need a few seconds to reach root servers.
+    # Retry up to 3 times with increasing timeout.
+    local attempt
+    for attempt in 1 2 3; do
+        run dig @127.0.0.1 -p 5335 example.com +short +timeout=15 +retry=2
+        if [[ "$output" =~ [0-9]+\.[0-9]+ ]]; then
+            return 0
+        fi
+        sleep 2
+    done
+    # Final attempt — fail the test if still no IP
+    run dig @127.0.0.1 -p 5335 example.com +short +timeout=15 +retry=2
     [ "$status" -eq 0 ]
-    # Should return at least one IP address
     [[ "$output" =~ [0-9]+\.[0-9]+ ]]
 }
 
