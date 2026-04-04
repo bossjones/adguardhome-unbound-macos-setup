@@ -47,7 +47,7 @@ EXPORTER_PORT=9618
 DRY_RUN="${DRY_RUN:-0}"
 
 if [[ "$DRY_RUN" == "1" ]]; then
-    sudo()      { echo "[DRY-RUN] sudo $*"; }
+    sudo()      { echo "[DRY-RUN] sudo $*"; cat > /dev/null 2>&1 || true; }
     brew()      {
         # Allow read-only brew queries; stub mutating commands
         case "$1" in
@@ -882,7 +882,7 @@ main() {
         --dry-run)
             DRY_RUN=1
             # Re-apply command overrides since DRY_RUN was set after init
-            sudo()      { echo "[DRY-RUN] sudo $*"; }
+            sudo()      { echo "[DRY-RUN] sudo $*"; cat > /dev/null 2>&1 || true; }
             brew()      {
                 case "$1" in
                     --prefix|--cellar|list|info)
