@@ -172,9 +172,12 @@ setup() {
     if ! command -v dig &>/dev/null; then
         skip "dig not available"
     fi
-    # dnssec-failed.org is a well-known test domain with intentionally broken DNSSEC
+    # dnssec-failed.org is a well-known test domain with intentionally broken DNSSEC.
+    # It depends on an external service, so skip if unreachable rather than failing CI.
     run dig @127.0.0.1 -p 5335 dnssec-failed.org A +timeout=10 +retry=1
-    # Should get SERVFAIL status (DNSSEC validation failure)
+    if [ "$status" -ne 0 ] && [[ "$output" != *"SERVFAIL"* ]]; then
+        skip "dnssec-failed.org unreachable — cannot test DNSSEC enforcement"
+    fi
     [[ "$output" == *"SERVFAIL"* ]]
 }
 

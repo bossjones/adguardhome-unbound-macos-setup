@@ -57,8 +57,16 @@ cleanup_unbound() {
     # that can block brew uninstall if not explicitly removed
     sudo launchctl bootout system/homebrew.mxcl.unbound 2>/dev/null || true
     sudo rm -f /Library/LaunchDaemons/homebrew.mxcl.unbound.plist 2>/dev/null || true
-    sleep 1
-    brew uninstall --force unbound 2>/dev/null || true
+    # Kill any lingering process
+    sudo killall unbound 2>/dev/null || true
+    sleep 2
+    brew uninstall --force --ignore-dependencies unbound 2>/dev/null || true
+    # Fallback: if brew uninstall silently failed, remove the keg directly
+    local cellar_dir
+    cellar_dir="$(brew --cellar 2>/dev/null)/unbound" 2>/dev/null || true
+    if [[ -n "$cellar_dir" && -d "$cellar_dir" ]]; then
+        rm -rf "$cellar_dir"
+    fi
     local conf_dir
     conf_dir="$(brew --prefix 2>/dev/null)/etc/unbound" 2>/dev/null || true
     if [[ -n "$conf_dir" && -d "$conf_dir" ]]; then
