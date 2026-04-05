@@ -19,10 +19,11 @@
 #
 # Usage:
 #   chmod +x install-adguard-unbound-macos.sh
-#   ./install-adguard-unbound-macos.sh [--adguard-only | --full | --status | --uninstall]
+#   ./install-adguard-unbound-macos.sh [--adguard-only | --exporter-only | --full | --status | --uninstall]
 #
 # Flags:
 #   --adguard-only   Install only AdGuard Home (skip Unbound + exporter)
+#   --exporter-only  Install only adguard-exporter (skip AdGuard Home + Unbound)
 #   --full           Install AdGuard Home + Unbound + adguard-exporter (default)
 #   --uninstall      Remove everything
 #   --status         Check service status
@@ -842,6 +843,7 @@ Adapted from: Dad, the Engineer's RPi guide.
 
 Options:
   --adguard-only   Install only AdGuard Home (skip Unbound & exporter)
+  --exporter-only  Install only adguard-exporter (Prometheus metrics)
   --full           Install AdGuard Home + Unbound + exporter (default)
   --uninstall      Remove all services
   --status         Check service status and connectivity
@@ -932,6 +934,10 @@ main() {
             install_adguard_home
             firewall_reminder
             router_reminder
+            ;;
+        --exporter-only)
+            preflight
+            install_adguard_exporter
             ;;
         --full|"")
             preflight

@@ -62,6 +62,7 @@ The script will walk you through each step interactively, prompting for confirma
 ```bash
 ./install.sh --full            # Install all three components (default)
 ./install.sh --adguard-only    # Install only AdGuard Home
+./install.sh --exporter-only   # Install only adguard-exporter (Prometheus metrics)
 ./install.sh --status          # Check service status and connectivity
 ./install.sh --uninstall       # Remove everything
 ./install.sh --dry-run         # Simulate full install (no changes made)
