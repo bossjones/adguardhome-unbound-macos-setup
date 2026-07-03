@@ -53,6 +53,8 @@ python-version = "3.12"
 # in standard (not all-strict) mode to avoid fighting Pydantic/typer idioms.
 typeCheckingMode = "standard"
 pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
 include = ["src", "tests"]
 reportExplicitAny = false
 reportUnannotatedClassAttribute = false
