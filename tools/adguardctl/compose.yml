@@ -1,0 +1,42 @@
+# AdGuard Home for adguardctl integration tests.
+#
+#   docker compose up -d --wait   # start (web UI on http://localhost:3000)
+#   docker compose down -v        # stop and remove runtime volumes
+#
+# The instance is pre-seeded (see docker/adguardhome/AdGuardHome.yaml) with:
+#   username: admin
+#   password: test1234
+# so the first-run setup wizard is skipped and tests can authenticate.
+#
+# The seed is mounted read-only and copied into a named volume on startup, so
+# AdGuard Home's in-place config migrations never modify the tracked seed file.
+services:
+  adguardhome:
+    image: adguard/adguardhome:v0.107.52
+    container_name: adguardctl-agh
+    ports:
+      - "3000:3000"   # web UI / control API
+    volumes:
+      - ./docker/adguardhome/AdGuardHome.yaml:/seed/AdGuardHome.yaml:ro
+      - agh-conf:/opt/adguardhome/conf
+      - agh-work:/opt/adguardhome/work
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cp -f /seed/AdGuardHome.yaml /opt/adguardhome/conf/AdGuardHome.yaml
+        exec /opt/adguardhome/AdGuardHome --no-check-update \
+          -c /opt/adguardhome/conf/AdGuardHome.yaml \
+          -w /opt/adguardhome/work
+    restart: "no"
+    healthcheck:
+      # Hit the (unauthenticated) web root; /control/status requires auth and
+      # would make wget report the container unhealthy even when it is up.
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+volumes:
+  agh-conf:
+  agh-work:

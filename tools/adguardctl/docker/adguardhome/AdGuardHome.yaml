@@ -1,0 +1,37 @@
+# Pre-seeded AdGuard Home config for integration tests.
+# Credentials: admin / test1234  (bcrypt hash below).
+# AdGuard Home will migrate/rewrite this file on first start; that is expected.
+http:
+  address: 0.0.0.0:3000
+users:
+  - name: admin
+    password: $2y$10$9BVgnjg36iNcb3mnzovTQuySK8GmG/aTmQvuY1hCjd1vuT/lYjLyC
+auth_attempts: 5
+block_auth_min: 15
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+    - https://dns.quad9.net/dns-query
+  bootstrap_dns:
+    - 9.9.9.10
+  upstream_mode: load_balance
+  cache_size: 4194304
+filtering:
+  enabled: true
+  filtering_enabled: true
+  protection_enabled: true
+  rewrites: []
+querylog:
+  enabled: true
+  interval: 24h
+statistics:
+  enabled: true
+  interval: 24h
+filters: []
+whitelist_filters: []
+user_rules: []
+clients:
+  persistent: []
+schema_version: 28
