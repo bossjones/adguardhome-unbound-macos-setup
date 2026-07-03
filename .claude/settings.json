@@ -49,10 +49,11 @@
             "Bash(uv run pytest:*)",
             "Bash(uv run:*)",
             "Bash(uv:*)",
+            "Bash(uvx:*)",
             "Bash(wc:*)",
             "Bash(xargs:*)",
             "Edit",
-            "mcp__plugin_telegram_*",
+            "mcp__plugin_telegram__*",
             "Read(//private/tmp/**)",
             "Skill(superpowers:*)",
             "Skill(superpowers:brainstorming)",
@@ -70,158 +71,23 @@
             "WebSearch",
             "Write"
         ],
-        "deny": []
+        "deny": [],
+        "additionalDirectories": [
+            "/Users/bossjones/dev/bossjones/boss-skills",
+            "/Users/bossjones/dev/bossjones/terraform_resouces_for_claude/terraform-provider-multipass",
+            "/Users/bossjones/dev/bossjones/terraform_resouces_for_claude/ubuntu-multipass-setup",
+            "/Users/bossjones/dev/basher83/lunar-claude",
+            "/Users/bossjones/dev/AdGuardHome",
+            "/Users/bossjones/dev/python-adguardhome"
+        ]
     },
     "statusLine": {
         "type": "command",
-        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/status_lines/status_line_v10.py",
+        "command": "uv run \"${CLAUDE_PROJECT_DIR}\"/.claude/status_lines/status_line_v10.py",
         "padding": 0
     },
-    "hooks": {
-        "PreToolUse": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_tool_use.py"
-                    }
-                ]
-            }
-        ],
-        "PostToolUse": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_use.py"
-                    }
-                ]
-            }
-        ],
-        "Notification": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/notification.py --notify"
-                    }
-                ]
-            }
-        ],
-        "Stop": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stop.py --chat"
-                    }
-                ]
-            }
-        ],
-        "SubagentStop": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_stop.py --notify"
-                    }
-                ]
-            }
-        ],
-        "UserPromptSubmit": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/user_prompt_submit.py --log-only --store-last-prompt --name-agent"
-                    }
-                ]
-            }
-        ],
-        "PreCompact": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/pre_compact.py"
-                    }
-                ]
-            }
-        ],
-        "SessionStart": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_start.py"
-                    }
-                ]
-            }
-        ],
-        "SessionEnd": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/session_end.py"
-                    }
-                ]
-            }
-        ],
-        "PermissionRequest": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/permission_request.py --log-only"
-                    }
-                ]
-            }
-        ],
-        "PostToolUseFailure": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/post_tool_use_failure.py"
-                    }
-                ]
-            }
-        ],
-        "SubagentStart": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/subagent_start.py"
-                    }
-                ]
-            }
-        ],
-        "Setup": [
-            {
-                "matcher": "",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/setup.py"
-                    }
-                ]
-            }
-        ]
-    },
     "enabledPlugins": {
+        "agent-harness@boss-skills": true,
         "superpowers@claude-plugins-official": true,
         "code-review@claude-plugins-official": true,
         "skill-creator@claude-plugins-official": true,
@@ -234,6 +100,7 @@
         "code-documentation@claude-code-workflows": true,
         "documentation-generation@claude-code-workflows": true,
         "c4-architecture@claude-code-workflows": true,
-        "documentation-standards@claude-code-workflows": true
+        "documentation-standards@claude-code-workflows": true,
+        "langsmith-tracing@langsmith-claude-code-plugins": true
      }
 }
