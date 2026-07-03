@@ -7,6 +7,7 @@ acts as an async context manager, mirroring the reference library's ergonomics.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Self
@@ -45,6 +46,21 @@ RESPONSE_STATUSES = (
     "safe_search",
     "processed",
 )
+
+# Raw config endpoints aggregated by ``AdGuard.export()`` (area key -> control URI).
+EXPORT_ENDPOINTS: dict[str, str] = {
+    "status": "status",
+    "dns_info": "dns_info",
+    "tls_status": "tls/status",
+    "filtering_status": "filtering/status",
+    "rewrites": "rewrite/list",
+    "access": "access/list",
+    "clients": "clients",
+    "blocked_services": "blocked_services/get",
+    "safesearch": "safesearch/status",
+    "querylog_config": "querylog/config",
+    "stats_config": "stats/config",
+}
 
 
 class SettingsAPI:
@@ -338,6 +354,24 @@ class AdGuard:
     def from_host(cls, host: str, **kwargs: Any) -> AdGuard:
         """Build an :class:`AdGuard` directly from a host and client kwargs."""
         return cls(AdGuardClient(host, **kwargs))
+
+    async def export(self) -> dict[str, Any]:
+        """Pull the raw config from every area into one dict.
+
+        Returns full-fidelity JSON (not the subset Pydantic models) keyed by
+        area. Endpoints are fetched concurrently; any endpoint that errors or is
+        absent on this AdGuard Home version maps to ``None`` instead of failing
+        the whole export.
+        """
+        keys = list(EXPORT_ENDPOINTS)
+        results = await asyncio.gather(
+            *(self._client.request(uri) for uri in EXPORT_ENDPOINTS.values()),
+            return_exceptions=True,
+        )
+        return {
+            key: (None if isinstance(res, BaseException) else res)
+            for key, res in zip(keys, results, strict=True)
+        }
 
     async def close(self) -> None:
         await self._client.close()

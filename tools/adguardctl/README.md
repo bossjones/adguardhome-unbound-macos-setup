@@ -71,6 +71,18 @@ login (`POST /control/login`) if Basic is rejected.
 | `rules` | Custom filtering rules (show/set) |
 | `querylog` | Read the query log, view config, clear |
 | `stats` | Show/reset statistics |
+| `export` | Dump the full **raw** config (all areas) as JSON |
+
+`export` preserves every field the API returns (the typed `--json` reads drop
+unknown fields), which makes it suitable for building a seed config:
+
+```bash
+uv run adguardctl --profile home export --output homelab.json
+```
+
+The committed test seed (`docker/adguardhome/AdGuardHome.yaml`) was generated this
+way from a live instance and then sanitized to public config only (filter lists,
+DNS tuning, safe search) with test credentials `admin`/`test1234`.
 
 Run `uv run adguardctl <group> --help` for details. DHCP is intentionally out of
 scope; DNS/TLS *write* operations are planned for a later phase.
@@ -81,7 +93,7 @@ scope; DNS/TLS *write* operations are planned for a later phase.
 just             # list recipes
 just test        # unit tests (mocked HTTP) with coverage
 just check       # format check + lint + type + tests (CI gate)
-just compose-up  # start AdGuard Home in a container (admin/test1234)
+just compose-up  # start AdGuard Home + Unbound sidecar (admin/test1234)
 just test-integration
 just compose-down
 ```

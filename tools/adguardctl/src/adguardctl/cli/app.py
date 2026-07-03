@@ -22,6 +22,7 @@ from . import (
     stats,
 )
 from ._common import AppState, get_state, run_async
+from .export import export_command
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -39,6 +40,8 @@ app.add_typer(filters.app, name="filters")
 app.add_typer(rules.app, name="rules")
 app.add_typer(querylog.app, name="querylog")
 app.add_typer(stats.app, name="stats")
+
+app.command(name="export")(export_command)
 
 
 def _version_callback(value: bool) -> None:

@@ -8,12 +8,33 @@ from typing import Any
 
 import pytest
 
+from adguardctl import config
 from adguardctl.api import AdGuard
 from adguardctl.client import AdGuardClient
 
 BASE = "http://adguard.local:3000/control"
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+_ENV_VARS = (
+    "AGH_HOST",
+    "AGH_PORT",
+    "AGH_USERNAME",
+    "AGH_PASSWORD",
+    "AGH_TLS",
+    "AGH_VERIFY_SSL",
+    "AGH_BASE_PATH",
+    "AGH_TIMEOUT",
+    "AGH_PROFILE",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep tests hermetic: never read the developer's real config or AGH_* env."""
+    monkeypatch.setattr(config, "DEFAULT_CONFIG_PATH", tmp_path / "no-config.toml")
+    for var in _ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture

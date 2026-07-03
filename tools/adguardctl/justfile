@@ -70,9 +70,9 @@ ci: check
 build:
     uv build
 
-# Start the AdGuard Home test container.
+# Start the AdGuard Home + Unbound test stack (builds the Unbound image).
 compose-up:
-    docker compose up -d --wait
+    docker compose up -d --build --wait
 
 # Stop and remove the test container and its volume.
 compose-down:

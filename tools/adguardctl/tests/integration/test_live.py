@@ -67,3 +67,14 @@ async def test_querylog_read(adguard: AdGuard) -> None:
     async with adguard:
         log = await adguard.querylog.get(response_status="all", limit=5)
     assert isinstance(log.data, list)
+
+
+async def test_unbound_upstream_reachable(adguard: AdGuard) -> None:
+    # Proves the AGH -> Unbound chain: AGH queries the upstream and reports its
+    # result. Success is reported as "OK" (older versions used ""); anything else
+    # is an error message.
+    upstream = "172.28.0.53:5335"
+    async with adguard:
+        result = await adguard.dns.test_upstreams(upstream_dns=[upstream])
+    assert result, "test_upstream_dns returned no result"
+    assert all(v in ("", "OK") for v in result.values()), f"upstream errors: {result}"

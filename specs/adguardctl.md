@@ -78,7 +78,19 @@ adguardctl [global opts] <command>
   rules      show | set (--rule/-r ... | --file/-f)
   querylog   show [-s status] [--search] [-n limit] [--older-than] | config | clear
   stats      show | reset
+  export     [--output PATH]
 ```
+
+`export` (`AdGuard.export()` in `api.py`, endpoint map `EXPORT_ENDPOINTS`) fans out
+concurrently over the raw config endpoints (`status`, `dns_info`, `tls/status`,
+`filtering/status`, `rewrite/list`, `access/list`, `clients`,
+`blocked_services/get`, `safesearch/status`, `querylog/config`, `stats/config`)
+and returns full-fidelity JSON — a failed/absent endpoint maps to `null`. The
+integration-test seed (`docker/adguardhome/AdGuardHome.yaml`) is produced by
+running `export` against a live instance and sanitizing to "public config only"
+(keep filter lists / DNS tuning / safe search / blocked hosts; drop clients,
+internal rewrites, and access-list client IPs; keep test creds; pin
+`schema_version: 28`).
 
 Global options: `--host/-H`, `--port/-p`, `--username/-u`, `--password`,
 `--tls/--no-tls`, `--insecure`, `--timeout`, `--profile`, `--config`, `--json`,
@@ -89,9 +101,12 @@ Global options: `--host/-H`, `--port/-p`, `--username/-u`, `--password`,
 - **Unit** (`tests/unit/`, default): respx-mocked httpx from `tests/fixtures/*.json`;
   typer `CliRunner` for command tests; ≥85% coverage gate.
 - **Integration** (`tests/integration/`, marked `integration` + `slow`, opt-in):
-  runs against `compose.yml` (image `adguardhome/adguardhome`, pre-seeded
-  `admin/test1234`), covering read paths and a rewrite add/list/delete round-trip.
-  Skipped unless `--slow` is passed and the instance is reachable.
+  runs against `compose.yml`, which mirrors the real architecture — AdGuard Home
+  (`adguard/adguardhome`, pre-seeded `admin/test1234`) forwarding to a recursive
+  **Unbound** sidecar (built from `docker/unbound/`, hardened config mirroring
+  `install.sh`, pinned at static IP `172.28.0.53:5335`). Tests cover read paths, a
+  rewrite add/list/delete round-trip, and an end-to-end AGH→Unbound upstream check
+  via `test_upstream_dns`. Skipped unless `--slow` is passed and the stack is up.
 
 ## justfile recipes
 
